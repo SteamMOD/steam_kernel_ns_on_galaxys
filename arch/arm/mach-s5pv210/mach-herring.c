@@ -1207,7 +1207,11 @@ static struct gpio_event_direct_entry herring_keypad_key_map[] = {
 	{
 		.gpio	= S5PV210_GPH3(2),
 		.code	= KEY_VOLUMEUP,
-	}
+	},
+  {
+    .gpio = S5PV210_GPH3(5),
+    .code = KEY_HOME,
+  }
 };
 
 static struct gpio_event_input_info herring_keypad_key_info = {

@@ -52,6 +52,36 @@ struct cypress_touchkey_devdata {
 	bool has_legacy_keycode;
 };
 
+// The keycodes are reported very badly, as there are always 217 (search) codes arount, that don't even exist...
+// 217: search, 102: back, 139: menu
+//
+// It goes something like this:
+// If we have KEY, OTHER and SEARCH we get the following:
+//   key pressed: KEY pressed
+//   key released: SEARCH pressed
+//   key pressed again: SEARCH released
+//   key released: SEARCH pressed
+//
+//   and this continues until you press the other key
+//   other pressed: KEY released + OTHER pressed + SEARCH released
+//   other released: SEARCH pressed
+//
+//   etc.
+// that's why we created a nice little proxy, that sends the correct data to the event thread...
+// we also replace the back buttons code with the actual back buttons code...
+static int last_button = 0;
+static inline void input_report_key_proxy(struct input_dev *dev, unsigned int code, int value)
+{
+  if (code!=217) {
+    if (value==0) return; // normal key releases are useless here
+    if (code==102) code = 158;
+    last_button = code;
+    input_report_key(dev,code,true);
+  } else {
+    input_report_key(dev,last_button,!value);
+  }
+}
+
 static int i2c_touchkey_read_byte(struct cypress_touchkey_devdata *devdata,
 					u8 *val)
 {
@@ -99,7 +129,7 @@ static void all_keys_up(struct cypress_touchkey_devdata *devdata)
 	int i;
 
 	for (i = 0; i < devdata->pdata->keycode_cnt; i++)
-		input_report_key(devdata->input_dev,
+		input_report_key_proxy(devdata->input_dev,
 						devdata->pdata->keycode[i], 0);
 
 	input_sync(devdata->input_dev);
@@ -166,12 +196,12 @@ static irqreturn_t touchkey_interrupt_thread(int irq, void *touchkey_devdata)
 				"range\n", __func__);
 			goto err;
 		}
-		input_report_key(devdata->input_dev,
+		input_report_key_proxy(devdata->input_dev,
 			devdata->pdata->keycode[scancode],
 			!(data & UPDOWN_EVENT_MASK));
 	} else {
 		for (i = 0; i < devdata->pdata->keycode_cnt; i++)
-			input_report_key(devdata->input_dev,
+			input_report_key_proxy(devdata->input_dev,
 				devdata->pdata->keycode[i],
 				!!(data & (1U << i)));
 	}
